@@ -28,7 +28,8 @@ func GetTotalSize(v interface{}) uint64 {
 	runtime.ReadMemStats(&stats)
 	initialHeap := stats.HeapAlloc
 
-	size := getTotalSize(reflect.ValueOf(v), make(visited), "root")
+	val := reflect.ValueOf(v)
+	size := getTotalSize(val, make(visited), "root")
 
 	if Debug {
 		fmt.Printf("Initial heap: %d, Final size: %d\n", initialHeap, size)
@@ -44,6 +45,40 @@ func getTotalSize(v reflect.Value, seen visited, path string) uint64 {
 	}
 
 	var size uint64
+
+	// Special handling for primitive types
+	switch v.Kind() {
+	case reflect.Bool:
+		size := uint64(1) // 1 byte
+		debugPrint("%s: Bool size %d", path, size)
+		return size
+
+	case reflect.Int8, reflect.Uint8:
+		size := uint64(1) // 1 byte
+		debugPrint("%s: Int8/Uint8 size %d", path, size)
+		return size
+
+	case reflect.Int16, reflect.Uint16:
+		size := uint64(2) // 2 bytes
+		debugPrint("%s: Int16/Uint16 size %d", path, size)
+		return size
+
+	case reflect.Int32, reflect.Uint32, reflect.Float32:
+		size := uint64(4) // 4 bytes
+		debugPrint("%s: Int32/Uint32/Float32 size %d", path, size)
+		return size
+
+	case reflect.Int64, reflect.Uint64, reflect.Float64:
+		size := uint64(8) // 8 bytes
+		debugPrint("%s: Int64/Uint64/Float64 size %d", path, size)
+		return size
+
+	case reflect.Int, reflect.Uint:
+		// Size depends on platform (usually 8 bytes on 64-bit systems)
+		size := uint64(v.Type().Size())
+		debugPrint("%s: Int/Uint size %d", path, size)
+		return size
+	}
 
 	// Handle special cases first
 	switch v.Kind() {
