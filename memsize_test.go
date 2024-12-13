@@ -3,6 +3,7 @@ package memsize
 import (
 	"fmt"
 	"testing"
+	"unsafe"
 )
 
 type Person struct {
@@ -192,4 +193,49 @@ func TestGetTotalSize(t *testing.T) {
 			t.Error("Size seems unreasonably large")
 		}
 	})
+}
+
+func TestComplexStructure(t *testing.T) {
+	Debug = true
+
+	person := &Person{
+		Name:    "John Doe",
+		Friends: make([]*Person, 0),
+		Data: map[string]interface{}{
+			"age":     30,
+			"hobbies": []string{"reading", "coding"},
+		},
+	}
+
+	// Add a friend to create circular reference
+	friend := &Person{
+		Name:    "Jane Doe",
+		Friends: []*Person{person},
+		Data: map[string]interface{}{
+			"age": 28,
+		},
+	}
+	person.Friends = append(person.Friends, friend)
+
+	size := GetTotalSize(person)
+	fmt.Printf("Complex structure total size: %d bytes\n", size)
+
+	// Basic size validations
+	if size <= uint64(unsafe.Sizeof(person)) {
+		t.Error("Size should be larger than just the pointer size")
+	}
+
+	// Validate size components exist
+	if size < uint64(len(person.Name)) {
+		t.Error("Size should include string content")
+	}
+
+	if size < uint64(cap(person.Friends)*int(unsafe.Sizeof(&Person{}))) {
+		t.Error("Size should include Friends slice capacity")
+	}
+
+	// The size should be reasonable
+	if size < 100 || size > 10000 {
+		t.Errorf("Size %d seems unreasonable for this structure", size)
+	}
 }

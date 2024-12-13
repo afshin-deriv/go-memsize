@@ -20,32 +20,6 @@ func debugPrint(format string, args ...interface{}) {
 	}
 }
 
-// getValueAddr returns the memory address of a reflect.Value if possible
-func getValueAddr(v reflect.Value) uintptr {
-	switch v.Kind() {
-	case reflect.Ptr, reflect.UnsafePointer:
-		if v.IsNil() {
-			return 0
-		}
-		return uintptr(v.UnsafePointer())
-	case reflect.Interface:
-		if v.IsNil() {
-			return 0
-		}
-		return uintptr(unsafe.Pointer(reflect.ValueOf(v.Interface()).Pointer()))
-	case reflect.Slice, reflect.Map:
-		if v.IsNil() {
-			return 0
-		}
-		return v.Pointer()
-	default:
-		if v.CanAddr() {
-			return uintptr(unsafe.Pointer(v.UnsafeAddr()))
-		}
-		return 0
-	}
-}
-
 // GetTotalSize returns the total memory size including indirect allocations
 func GetTotalSize(v interface{}) uint64 {
 	runtime.GC()
@@ -69,18 +43,9 @@ func getTotalSize(v reflect.Value, seen visited, path string) uint64 {
 		return 0
 	}
 
-	// Get address if possible to track visited values
-	addr := getValueAddr(v)
-	if addr != 0 {
-		if seen[addr] {
-			debugPrint("%s: Already seen address %x", path, addr)
-			return 0
-		}
-		seen[addr] = true
-	}
-
 	var size uint64
 
+	// Handle special cases first
 	switch v.Kind() {
 	case reflect.Interface:
 		if v.IsNil() {
@@ -88,9 +53,9 @@ func getTotalSize(v reflect.Value, seen visited, path string) uint64 {
 			debugPrint("%s: Nil interface, size %d", path, size)
 			return size
 		}
-		size = getTotalSize(v.Elem(), seen, path+".elem")
-		debugPrint("%s: Interface elem size %d", path, size)
-		return size
+		elemSize := getTotalSize(v.Elem(), seen, path+".elem")
+		debugPrint("%s: Interface elem size %d", path, elemSize)
+		return elemSize + uint64(unsafe.Sizeof(v.Interface()))
 
 	case reflect.Ptr:
 		if v.IsNil() {
@@ -98,11 +63,26 @@ func getTotalSize(v reflect.Value, seen visited, path string) uint64 {
 			debugPrint("%s: Nil pointer, size %d", path, size)
 			return size
 		}
+
+		// Get pointer address
+		addr := uintptr(v.UnsafePointer())
 		ptrSize := uint64(unsafe.Sizeof(v.Interface()))
+
+		// Even if we've seen this pointer, we still count the pointer itself
+		if seen[addr] {
+			debugPrint("%s: Already seen pointer %x, size %d", path, addr, ptrSize)
+			return ptrSize
+		}
+
+		// Mark as seen
+		seen[addr] = true
+
+		// Get the element size
 		elemSize := getTotalSize(v.Elem(), seen, path+".ptr")
-		size = ptrSize + elemSize
-		debugPrint("%s: Pointer (size: %d) + elem (size: %d) = %d", path, ptrSize, elemSize, size)
-		return size
+		totalSize := ptrSize + elemSize
+		debugPrint("%s: Pointer to new address %x (size: %d) + elem (size: %d) = %d",
+			path, addr, ptrSize, elemSize, totalSize)
+		return totalSize
 
 	case reflect.Slice:
 		if v.IsNil() {
@@ -163,7 +143,8 @@ func getTotalSize(v reflect.Value, seen visited, path string) uint64 {
 
 		for i := 0; i < v.NumField(); i++ {
 			field := v.Field(i)
-			fieldSize := getTotalSize(field, seen, fmt.Sprintf("%s.%s", path, v.Type().Field(i).Name))
+			fieldName := v.Type().Field(i).Name
+			fieldSize := getTotalSize(field, seen, fmt.Sprintf("%s.%s", path, fieldName))
 			fieldsSize += fieldSize
 		}
 
