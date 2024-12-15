@@ -1,7 +1,7 @@
-go-memsize
+# go-memsize
 A Go library for calculating the actual memory size of objects, including all indirect allocations.
 
-Features
+## Features
 - Accurate memory size calculation of Go objects
 - Supports complex data structures with circular references
 - Debug mode for detailed size breakdowns
@@ -11,12 +11,12 @@ Features
  - Maps and structs
  - Basic types and strings
 
-Installation
+ ## Installation
  ```
  go get github.com/afshin-deriv/go-memsize
  ```
 
-Usage
+ ## Usage
  ```
  package main
 
@@ -50,7 +50,7 @@ func main() {
 }
  ```
 
-How It Works
+ ## How It Works
 The library calculates memory size by:
 
 1. Using reflection to traverse object structures
@@ -59,8 +59,8 @@ The library calculates memory size by:
 4. Accounting for map bucket allocations
 5. Measuring actual string data sizes
 
-Contributing
+## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-License
+## License
 MIT License - see LICENSE file
